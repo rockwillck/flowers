@@ -1,9 +1,9 @@
 var canvas = document.getElementById(`canvas`);
 var ctx = canvas.getContext('2d');
 var rect = canvas.getBoundingClientRect();
-canvas.width = window.innerWidth - rect.left*2
-canvas.height = window.innerHeight - rect.top*2
-
+canvas.width = 1024
+canvas.height = 768
+var weedsLS
 class Particle {
     constructor(x, y, color) {
         this.pos = {x:x, y:y}
@@ -21,9 +21,9 @@ class Particle {
         ctx.fill()
         ctx.stroke()
 
-        this.pos.x += Math.cos(this.direction)
-        this.pos.y += Math.sin(this.direction)
-        this.radius *= 0.9
+        this.pos.x += Math.cos(this.direction) * (editMode ? canvas.width/5000 : canvas.width/500)
+        this.pos.y += Math.sin(this.direction) * (editMode ? canvas.width/5000 : canvas.width/500)
+        this.radius *= editMode ? 0.99 : 0.9
     }
 }
 class Flower {
@@ -36,6 +36,7 @@ class Flower {
         this.color = `hsl(${Math.random()*255}, 50%, 50%)`
         this.cost = flowerCost
         flowerCost = Math.round(flowerCost*2.5)
+        localStorage.fC = flowerCost
 
         this.justCreated = true
     }
@@ -74,7 +75,7 @@ class Golem {
         if (this.pos.y <= margin*canvas.width/rows || this.pos.y >= canvas.height - margin*canvas.width/rows) {
             this.direction *= -1
         }
-        this.pos.y -= this.direction*this.speed
+        this.pos.y -= this.direction*this.speed*(editMode ? 0.1 : 1)
         ctx.fillStyle = "rgb(150, 225, 150)"
         ctx.strokeStyle = "black"
         ctx.beginPath()
@@ -94,11 +95,11 @@ class Golem {
         ctx.closePath()
         ctx.fill()
         ctx.stroke()
-        if (frame - this.last >= this.freq) {
+        if (frame - this.last >= this.freq*(editMode ? 10 : 1)) {
             if (points >= flowerCost) {
                 clear = true
                 flowers.forEach((flower) => {
-                    if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (flower.growth + fR + this.range)**2) {
+                    if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (flower.growth*fR/10 * 6 + this.range)**2) {
                         clear = false
                     }
                 })
@@ -128,7 +129,7 @@ class Ghost {
         if (this.pos.y <= margin*canvas.width/rows || this.pos.y >= canvas.height - margin*canvas.width/rows) {
             this.direction *= -1
         }
-        this.pos.y -= this.direction*this.speed
+        this.pos.y -= this.direction*this.speed*(editMode ? 0.1 : 1)
         ctx.fillStyle = "rgba(200, 200, 255)"
         ctx.strokeStyle = "black"
         roundRect(this.pos.x - this.range/2, this.pos.y - this.range, this.range, this.range*2)
@@ -143,14 +144,22 @@ class Ghost {
         ctx.arc(this.pos.x, this.pos.y - this.direction*this.range*0.8, this.range*0.1, 0, 2*Math.PI)
         ctx.closePath()
         ctx.fill()
-        if (frame - this.last >= this.freq) {
+        if (frame - this.last >= this.freq*(editMode ? 10 : 1)) {
             clear = false
             weeds.forEach((weed, index) => {
                 if ((weed.pos.x - this.pos.x)**2 + (weed.pos.y - this.pos.y)**2 <= (fR + this.range)**2 && !clear) {
                     clear = true
                     weeds.splice(index, 1)
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(weed.pos.x, weed.pos.y, "red"))
+                    setTimeout(() => {
+                        weedsLS = ""
+                        weeds.forEach((weed) => {
+                            weedsLS += weed.pos.x.toString() + "," + weed.pos.y.toString()
+                        })
+                    }, 100)
+                    if (settings[2]) {
+                        for (i = 0; i<50; i++) {
+                            particles.push(new Particle(weed.pos.x, weed.pos.y, "red"))
+                        }
                     }
                 }
             })
@@ -158,6 +167,7 @@ class Ghost {
             if (clear) {
                 this.last = frame
                 points += 1
+                localStorage.points = points
             }
         }
     }
@@ -207,14 +217,16 @@ class Cloud {
         ctx.fill()
         ctx.stroke()
 
-        if (frame - this.last >= this.freq) {
+        if (frame - this.last >= this.freq*(editMode ? 10 : 1)) {
             clear = false
             flowers.forEach((flower, index) => {
                 if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (fR + flower.growth + this.range)**2 && !clear && flower.growth < flowerThresh) {
                     clear = true
                     flower.growth += 1
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(flower.pos.x, flower.pos.y, "rgba(150, 150, 255)"))
+                    if (settings[2]) {
+                        for (i = 0; i<50; i++) {
+                            particles.push(new Particle(flower.pos.x, flower.pos.y, "rgba(150, 150, 255)"))
+                        }
                     }
                 }
             })
@@ -241,27 +253,33 @@ window.addEventListener("keydown", function(event) {
         }
     }
     if (event.key == "Alt") {
-        alt = true
+        alt = alt ? false : true
     }
 
     if (event.code == "KeyQ" && alt) {
         running = false
         credits = false
         settingsMenu = false
+        cutscene = 0
+    }
+
+    if (event.key == " ") {
+        if (cutscene == 1) {
+            cutscene = 3
+        } else {
+            cutscene = 0
+        }
     }
 })
 
 window.addEventListener("keyup", function(event) {
-    if (event.key == "Alt") {
-        alt = false
-    }
 })
 
 var menuHovering = -1
 window.addEventListener("mousemove", function(event) {
     var rect = canvas.getBoundingClientRect();
-    mouseX = event.clientX - rect.left
-    mouseY = event.clientY - rect.top
+    mouseX = ((event.clientX - rect.left)/(window.innerWidth - rect.left*2))*canvas.width
+    mouseY = ((event.clientY - rect.top)/(window.innerHeight - rect.top*2))*canvas.height
     mousePos.x = mouseX
     mousePos.y = mouseY
     if (running) {
@@ -274,10 +292,11 @@ window.addEventListener("mousemove", function(event) {
 });
 
 var credits = false
+var clearMenu = false
 window.addEventListener("click", function(event) {
     var rect = canvas.getBoundingClientRect();
-    mouseX = event.clientX - rect.left
-    mouseY = event.clientY - rect.top
+    mouseX = ((event.clientX - rect.left)/(window.innerWidth - rect.left*2))*canvas.width
+    mouseY = ((event.clientY - rect.top)/(window.innerHeight - rect.top*2))*canvas.height
 
     if (running) {
         altClicked = false
@@ -287,93 +306,130 @@ window.addEventListener("click", function(event) {
             autos.forEach((auto, index) => {
                 if ((auto.pos.x - mouseX)**2 + (auto.pos.y - mouseY) ** 2 <= (auto.range)**2) {
                     points += auto.cost*0.8
+                    localStorage.points = points
                     autos.splice(index, 1)
-                    clear = false
                     messages.push(new Message(`+ $${auto.cost*0.8}`, 1))
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(mouseX, mouseY, "gray"))
+                    if (settings[2]) {
+                        for (i = 0; i<50; i++) {
+                            particles.push(new Particle(mouseX, mouseY, "gray"))
+                        }
                     }
                     clear = false
                     autoClicked = true
                 }
             })
-        }
-    
-        weedClicked = false
-        flowerPicked = false
-        for(i=0;i<weeds.length;i++) {
-            flowerRadius = fR
-            index = weeds.length - i - 1
-            weed = weeds[index]
-            if ((weed.pos.x - mouseX)**2 + (weed.pos.y - mouseY)**2 <= flowerRadius**2*2) {
-                weeds.splice(index, 1)
-                points += 1
-                clear = false
-                weedClicked = true
-                break;
-            }
-        }
-
-        flowers.forEach((flower, index) => {
-            flowerRadius = flower.growth + fR
-            if ((flower.pos.x - mouseX)**2 + (flower.pos.y - mouseY)**2 <= flowerRadius**2*2) {
-                if (flower.growth >= flowerThresh) {
-                    flowers.splice(index, 1)
-                    flowersPicked += 1
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(mouseX, mouseY, "rgba(150, 255, 150)"))
-                    }
-                    if (flowersPicked == 1) {
-                        messages.push(new Message("You picked your first flower!", 1))
-                    }
-                } else {
-                    messages.push(new Message("That flower needs to grow more.", 0))
-                }
-                clear = false
-                flowerPicked = true
-            }
-        })
-        if (clear) {
-            if (points >= flowerCost) {
-                points -= flowerCost
-                flowers.push(new Flower(mouseX, mouseY, 1))
-            } else {
-                if (!cm) {
-                    messages.push(new Message(["You don't have enough points.", "Ya broke you poor peasant.", "Begging for flowers? Ha!"][Math.floor(Math.random()*3)], 0))
-                }
-                cm = false
-            }
         } else {
-            if (!flowerPicked) {
-                if (weedClicked) {
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(mouseX, mouseY, "red"))
+            weedClicked = false
+            flowerPicked = false
+            for(i=0;i<weeds.length;i++) {
+                flowerRadius = fR
+                index = weeds.length - i - 1
+                weed = weeds[index]
+                if ((weed.pos.x - mouseX)**2 + (weed.pos.y - mouseY)**2 <= flowerRadius**2*2) {
+                    weeds.splice(index, 1)
+                    points += 1
+                    localStorage.points = points
+                    clear = false
+                    weedClicked = true
+                    if (localStorage.autoed != ":)" && points >= 10) {
+                        cutscene = 6
+                        localStorage.autoed = ":)"
                     }
-                    if (points == 1 && flowers.length == 0) {
-                        messages.push(new Message("You picked your first weed!", 1))
+                    break;
+                }
+            }
+
+            flowers.forEach((flower, index) => {
+                flowerRadius = flower.growth*fR/10 * 6
+                if ((flower.pos.x - mouseX)**2 + (flower.pos.y - mouseY)**2 <= flowerRadius**2*2) {
+                    if (flower.growth >= flowerThresh) {
+                        flowers.splice(index, 1)
+                        flowersPicked += 1
+                        localStorage.fP = flowersPicked
+                        if (settings[2]) {
+                            for (i = 0; i<50; i++) {
+                                particles.push(new Particle(mouseX, mouseY, "rgba(150, 255, 150)"))
+                            }
+                        }
+                        if (flowersPicked == 1) {
+                            messages.push(new Message("You picked your first flower!", 1))
+                        }
+                    } else {
+                        messages.push(new Message("That flower needs to grow more.", 0))
                     }
-                } else if (!altClicked && !autoClicked) {
-                    messages.push(new Message((["There's already a flower there.", "Uh... can't overlap flowers...", "Stay calm and don't overlap the freaking flowers idiot!"])[Math.floor(Math.random()*3)], 0))
+                    clear = false
+                    flowerPicked = true
+                }
+            })
+            if (clear) {
+                if (points >= flowerCost) {
+                    points -= flowerCost
+                    localStorage.points = points
+                    flowers.push(new Flower(mouseX, mouseY, 1))
+                } else {
+                    if (!cm) {
+                        messages.push(new Message(["You don't have enough points.", "Ya broke you poor peasant.", "Begging for flowers? Ha!"][Math.floor(Math.random()*3)], 0))
+                    }
+                    cm = false
+                }
+            } else {
+                if (!flowerPicked) {
+                    if (weedClicked) {
+                        if (settings[2]) {
+                            for (i = 0; i<50; i++) {
+                                particles.push(new Particle(mouseX, mouseY, "red"))
+                            }
+                        }
+                        if (points == 1 && flowerCost == 1) {
+                            messages.push(new Message("You picked your first weed!", 1))
+                            cutscene = 4
+                        }
+                    } else if (!altClicked && !autoClicked) {
+                        messages.push(new Message((["There's already a flower there.", "Uh... can't overlap flowers...", "Stay calm and don't overlap the freaking flowers idiot!"])[Math.floor(Math.random()*3)], 0))
+                    }
                 }
             }
         }
-    } else {
-        if (menuHovering == 1 && !credits && !settingsMenu) {
+    } else if (cutscene == 0) {
+        if (menuHovering == 1 && !credits && !settingsMenu && !clearMenu) {
             running = true
         } else if (menuHovering == 1 && !settingsMenu && credits) {
             credits = false
         } else if (menuHovering == 2 && !settingsMenu) {
             credits = true
-        } else if (menuHovering == 0 && !settingsMenu) {
+        } else if (menuHovering == 0 && !settingsMenu && !clearMenu) {
             settingsMenu = true
         } else if (menuHovering == 2 && settingsMenu) {
+            settings[2] = settings[2] ? 0 : 1 
+            localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
+        } else if (menuHovering == 3 && settingsMenu) {
             settingsMenu = false
         } else if (menuHovering == 0 && settingsMenu) { 
             settings[1] = settings[1] == "Luminari" ? "Verdana" : "Luminari"
+            localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
         } else if (menuHovering == 1 && settingsMenu) { 
             settings[0] = settings[0] == 0.2 ? 0 : 0.2
             textHoverChange = textHoverChange == 0 ? 0.5 : 0
             textHover = 0
+            localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
+        } else if (menuHovering == 3) {
+            clearMenu = true
+        } else if (menuHovering == 1 && clearMenu) {
+            clearMenu = false
+        } else if (menuHovering == 0 && clearMenu) {
+            clearMenu = false
+            keys = []
+            for (var i = 0; i < localStorage.length; i++) {  
+                key = localStorage.key(i)
+                if(key != "settings") {       
+                    keys.push(key)
+                } 
+            }
+
+            keys.forEach((key) => {
+                localStorage.removeItem(key)
+            })
+            window.location.reload()
         }
     }
 });
@@ -381,27 +437,29 @@ window.addEventListener("click", function(event) {
 window.addEventListener("contextmenu", function(event) {
     event.preventDefault();
     var rect = canvas.getBoundingClientRect();
-    mouseX = event.clientX - rect.left
-    mouseY = event.clientY - rect.top
+    mouseX = ((event.clientX - rect.left)/(window.innerWidth - rect.left*2))*canvas.width
+    mouseY = ((event.clientY - rect.top)/(window.innerHeight - rect.top*2))*canvas.height
     
     clear = false
     flowers.forEach((flower) => {
-        flowerRadius = flower.growth + fR
+        flowerRadius = flower.growth*fR/10 * 6
         if ((flower.pos.x - mouseX)**2 + (flower.pos.y - mouseY)**2 <= flowerRadius**2*2) {
             clear = true
             if (flower.growth < flowerThresh) {
-                for (i = 0; i<50; i++) {
-                    particles.push(new Particle(mouseX, mouseY, "rgba(150, 150, 255)"))
+                if (settings[2]) {
+                    for (i = 0; i<50; i++) {
+                        particles.push(new Particle(mouseX, mouseY, "rgba(150, 150, 255)"))
+                    }
                 }
                 flower.growth += 1
-                if (flowers.length == 1 && flowers[0].growth == 2) {
+                if (flowersPicked == 0 && flowers[0].growth == 2) {
                     messages.push(new Message("You watered your first flower!", 3))
                 }
             }
         }
     })
 
-    if (!clear) {
+    if (!clear && !cutscene) {
         cm = cm ? false : true
     }
 });
@@ -423,30 +481,117 @@ function roundRect(x, y, width, height) {
     ctx.stroke()
 }
 
+let dialogueX = {}
+function dialogue(title, text) {
+    if (typeof(dialogueX[title]) == "undefined") {
+        dialogueX[title] = 0
+    }
+    x = dialogueX[title]
+    ctx.fillStyle = "rgba(150, 115, 0, 0.9)"
+    y = Math.round(((1/x) * Math.sin(x))*canvas.height*0.8)
+    ctx.fillRect(canvas.width*0.2, canvas.height*0.2 - y, canvas.width*0.6, canvas.height*0.6)
+    ctx.strokeRect(canvas.width*0.2, canvas.height*0.2 - y, canvas.width*0.6, canvas.height*0.6)
+    ctx.font = `${canvas.width/30}px ${settings[1]}`
+    ctx.fillStyle = "black"
+    ctx.fillText(title, canvas.width*0.225, canvas.height*0.275 - y)
+    ctx.font = `${canvas.width/45}px ${settings[1]}`
+    text.split("[enter]").forEach((line, i) =>  {
+        if (line.startsWith("[emphasis]")) {
+            ctx.fillStyle = "white"
+            ctx.fillText(line.replace("[emphasis]", ""), canvas.width*0.225, canvas.height*(0.325 + 0.035*i) - y)
+        } else { 
+            ctx.fillStyle = "black"
+            ctx.fillText(line, canvas.width*0.225, canvas.height*(0.325 + 0.035*i) - y)
+        }
+    })
+
+    ctx.font = `${canvas.width/70}px ${settings[1]}`
+    ctx.fillStyle = "white"
+    ctx.fillText("[SPACE] to continue.", canvas.width*0.65, canvas.height*0.775 - textHover*0.5 - y)
+
+    dialogueX[title] += 0.15
+}
+
+function blank() {
+
+}
+
+function intro() {
+    dialogue("I miss my family...", "The plague...[enter]so fresh in my mind.[enter]But flowers can save them...")
+}
+
+function tutorialWeed() {
+    dialogue("Weeding", "I must garden...[enter]There is no other choice...[enter]Force myself to weed. [enter][emphasis]Click, click, click.")
+}
+
+function tutorialFlower() {
+    dialogue("Planting", "But weeds only grant me nothing![enter]They will not save my family![enter]I must plant...[enter][emphasis]Click, click, click.")
+}
+
+function tutorialWater() {
+    dialogue("Watering", "Flowers are worthless this small...[enter]Water them, I must...[enter]But how?[enter]Perhaps I just need...[enter][emphasis]the RIGHT CLICK![enter][enter][emphasis]I really should visit the top left corner of my garden...")
+}
+
+function tutorialAuto() {
+    dialogue("Automation", "How I thirst to weed and plant with my own raw hands...[enter]But this body fails me...[enter]Perhaps some automation is in good taste...[enter]Golems for planting...[enter]Ghosts for weedings...[enter]Trees for watering...[enter][enter][emphasis]Maybe another right click over grass? [enter][emphasis]An [Alternate] CLICK to destroy them...")
+}
+
+let opacity = 0.1
+let opacP = 0.025
+function open() {
+    ctx.fillStyle = `rgba(0, 0, 0, ${opacP < 0 ? opacity : 1})`
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`
+    ctx.beginPath()
+    ctx.arc(canvas.width/2, canvas.height/2, canvas.width/5, 0, 2*Math.PI)
+    ctx.closePath()
+    ctx.fill()
+    ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`
+    ctx.beginPath()
+    ctx.arc(canvas.width/2, canvas.height/2 - canvas.width/5 + canvas.width/11, canvas.width/12, 0, 2*Math.PI)
+    ctx.closePath()
+    ctx.fill()
+
+    ctx.font = `${canvas.width/30}px Courier New`
+    ctx.fillText("Eyeball Games", canvas.width/2 - 4*canvas.width/30, canvas.height * 0.6)
+
+    opacP *= opacity > 1 ? -1 : 1
+    opacity += opacP
+
+    if (opacity <= 0) {
+        cutscene = 0
+    }
+}
+
+var cutscene = 2
+const cutscenes = [blank, intro, open, tutorialWeed, tutorialFlower, tutorialWater, tutorialAuto]
+
 var particles = []
 var settingsMenu = false
-var settings = [0.2, "Luminari"]
+const setPre = localStorage.settings
+var settings = typeof(setPre) == "undefined" ? [0.2, "Luminari", 1] : [parseFloat(setPre.split(",")[0]), setPre.split(",")[1], parseInt(setPre.split(",")[2])]
 var running = false
 var textHover = 0
-var textHoverChange = 0.5
+var textHoverChange = settings[0] * 2.5
 let lastUpdate
 let frame = 1
 var flowers = []
-var flowersPicked = 0
+var flowersPicked = typeof(localStorage.fP) == "undefined" ? 0 : parseInt(localStorage.fP)
 var weeds = []
 const rows = 5
 const margin = 0.2
-var points = 0
-var boq = 0
+var points = typeof(localStorage.points) == "undefined" ? 0 : parseInt(localStorage.points)
 const boqCount = 12
+var boq = Math.floor(points/boqCount)
 var widget_showing = false
 const widgetMax = canvas.width/4
 const widgetMin = canvas.width/20
 const widgetFontSize = canvas.width/50
 var widgetRadius = widgetMin
 var messages = []
-var fR = 15
-var flowerCost = 1
+var fR = canvas.width/65
+var flowerCost = typeof(localStorage.fC) == "undefined" ? 1 : parseInt(localStorage.fC)
 const msgLife = 75
 const msgSnap = 20
 let grasses = []
@@ -458,10 +603,15 @@ var cmSelected = -1
 var autoCosts = [10, 10, 10]
 const cmRows = [`Planter Golem`, `Cloud Tree`, `Ghost`]
 var autos = []
+var editMode = false
 function animate() {
     requestAnimationFrame(animate)
+
     if (running) {
         if (frame == 1) {
+            if (flowerCost == 1 && points == 0) {
+                cutscene = 1
+            }
             for(x = 0; x<grassCount; x++) {
                 propG = [Math.random()*canvas.width, Math.random()*canvas.height, 0, ([2, 1, 0.5, -0.5, -1, -2][Math.floor(Math.random()*6)])]
                 clear = false
@@ -479,7 +629,7 @@ function animate() {
         var now = Date.now();
         var dt = (now - lastUpdate)/30;
         lastUpdate = now;
-        ctx.lineWidth = 2.5
+        ctx.lineWidth = canvas.width/500
         ctx.fillStyle = "rgb(100, 155, 100)"
         ctx.fillRect(0, 0, canvas.width, canvas.height)
     
@@ -495,6 +645,7 @@ function animate() {
             if (clear) {
                 if (autoCosts[cmSelected] <= points) {
                     points -= autoCosts[cmSelected]
+                    localStorage.points = points
                     if (cmSelected == 0) {
                         autos.push(new Golem(mousePos.x, mousePos.y))
                     } else if (cmSelected == 1) {
@@ -502,8 +653,10 @@ function animate() {
                     } else if (cmSelected == 2) {
                         autos.push(new Ghost(mousePos.x, mousePos.y))
                     }
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(mouseX, mouseY, "gray"))
+                    if (settings[2]) {
+                        for (i = 0; i<50; i++) {
+                            particles.push(new Particle(mouseX, mouseY, "gray"))
+                        }
                     }
                 } else {
                     messages.push(new Message("You can't afford that yet.", 0))
@@ -539,6 +692,35 @@ function animate() {
     
         ctx.strokeStyle = "black"
     
+        weeds.forEach((weed) => {
+            flowerRadius = fR
+            ctx.fillStyle = "rgb(150, 225, 150)"
+            ctx.beginPath()
+            ctx.arc(weed.pos.x + flowerRadius/2, weed.pos.y, flowerRadius/2, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(weed.pos.x - flowerRadius/2, weed.pos.y, flowerRadius/2, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(weed.pos.x, weed.pos.y - flowerRadius/2, flowerRadius/2, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(weed.pos.x, weed.pos.y + flowerRadius/2, flowerRadius/2, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(weed.pos.x, weed.pos.y, flowerRadius/2, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+        })
+    
         flowers.forEach((flower, index) => {
             clear = false
             for(i = 0; i<rows; i++) {
@@ -549,15 +731,18 @@ function animate() {
             }
             if (clear) {
                 if (flower.justCreated) {
-                    for (i = 0; i<50; i++) {
-                        particles.push(new Particle(flower.pos.x, flower.pos.y, "pink"))
+                    if (settings[2]) {
+                        for (i = 0; i<50; i++) {
+                            particles.push(new Particle(flower.pos.x, flower.pos.y, "pink"))
+                        }
                     }
-                    if (flowersPicked == 0 && flowers.length == 1) {
+                    if (flowersPicked == 0 && flowerCost == 3) {
                         messages.push(new Message("You planted your first flower!", 1))
+                        cutscene = 5
                     }
                     flower.justCreated = false
                 }
-                flowerRadius = flower.growth + fR
+                flowerRadius = flower.growth*fR/10 * 6
                 ctx.fillStyle = "white"
                 ctx.beginPath()
                 ctx.arc(flower.pos.x + flowerRadius/2, flower.pos.y, flowerRadius/2, 0, 2*Math.PI)
@@ -598,49 +783,24 @@ function animate() {
                 flowers.splice(index, 1)
                 messages.push(new Message(["Can't plant there.", "That's not dirt.", "Invalid plantery."][Math.floor(Math.random()*3)], 0))
                 points += flower.cost
+                localStorage.points = points
                 flowerCost = flower.cost
+                localStorage.fC = flowerCost
             }
-        })
-    
-        weeds.forEach((weed) => {
-            flowerRadius = fR
-            ctx.fillStyle = "rgb(150, 225, 150)"
-            ctx.beginPath()
-            ctx.arc(weed.pos.x + flowerRadius/2, weed.pos.y, flowerRadius/2, 0, 2*Math.PI)
-            ctx.closePath()
-            ctx.fill()
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.arc(weed.pos.x - flowerRadius/2, weed.pos.y, flowerRadius/2, 0, 2*Math.PI)
-            ctx.closePath()
-            ctx.fill()
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.arc(weed.pos.x, weed.pos.y - flowerRadius/2, flowerRadius/2, 0, 2*Math.PI)
-            ctx.closePath()
-            ctx.fill()
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.arc(weed.pos.x, weed.pos.y + flowerRadius/2, flowerRadius/2, 0, 2*Math.PI)
-            ctx.closePath()
-            ctx.fill()
-            ctx.stroke()
-            ctx.beginPath()
-            ctx.arc(weed.pos.x, weed.pos.y, flowerRadius/2, 0, 2*Math.PI)
-            ctx.closePath()
-            ctx.fill()
         })
     
         autos.forEach((auto, index) => {
             auto.draw()
         })
 
-        particles.forEach((particle, index) => {
-            particle.draw()
-            if (particle.radius < 0.1) {
-                particles.splice(index, 1)
-            }
-        })
+        if (settings[2]) {
+            particles.forEach((particle, index) => {
+                particle.draw()
+                if (particle.radius < 0.1) {
+                    particles.splice(index, 1)
+                }
+            })
+        }
     
         messages.forEach((message, index) => {
             ctx.fillStyle = "rgba(" + ["225, 150, 150", "150, 225, 150", "225, 225, 150", "150, 150, 225"][message.type] + ",0.85)"
@@ -700,14 +860,82 @@ function animate() {
         }
     
         frame += 1
-    } else if (settingsMenu) {
-        for (i=0; i<3; i++) {
+    } else if (clearMenu) {
+        for (i=0; i<2; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
                 menuHovering = i
                 break;
             }
+        }
 
-            if (i==2) {
+        ctx.fillStyle = "rgb(50, 150, 50)"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        if (i != 2) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.3)"
+            ctx.fillRect(0, canvas.height/2 + canvas.width/25*(menuHovering) - textHover + canvas.height/60, canvas.width, canvas.width/25)
+        }
+
+        ctx.fillStyle = "white"
+        ctx.font = `${canvas.width/20}px ${settings[1]}`
+        ctx.fillText("The Confirmation.", canvas.width/2 - (canvas.width/20*5), canvas.height/2 - canvas.width/20 - textHover)
+        ctx.font = `${canvas.width/50}px ${settings[1]}`
+        ctx.fillText("Yes.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
+        ctx.fillText("No.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 2 - textHover)
+
+        for (i=0; i<canvas.width/5; i++) {
+            ctx.strokeStyle = "green"
+            ctx.beginPath()
+            ctx.moveTo(i*5, canvas.height)
+            ctx.lineTo(i*5 + textHover*0.3*-1, canvas.height*0.98)
+            ctx.closePath()
+            ctx.stroke()
+        }
+
+        for (i=0.5; i<canvas.width/37; i++) {
+            ctx.strokeStyle = "white"
+            ctx.beginPath()
+            ctx.moveTo(i*37, canvas.height)
+            ctx.lineTo(i*37 + textHover*0.3*-1, canvas.height*0.92)
+            ctx.closePath()
+            ctx.stroke()
+
+            ctx.strokeStyle = "black"
+            ctx.fillStyle = "white"
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1 - canvas.height/50, canvas.height*0.92, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1 + canvas.height/50, canvas.height*0.92, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1, canvas.height*0.90, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1, canvas.height*0.94, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+
+            ctx.fillStyle = `hsl(${255*i/37}, 50%, 50%)`
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1, canvas.height*0.92, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+        }
+    } else if (settingsMenu) {
+        for (i=0; i<4; i++) {
+            if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
+                menuHovering = i
+                break;
+            } else {
                 menuHovering = -1
             }
         }
@@ -725,13 +953,10 @@ function animate() {
         ctx.font = `${canvas.width/20}px ${settings[1]}`
         ctx.fillText("The Settings.", canvas.width/2 - (canvas.width/20*5), canvas.height/2 - canvas.width/20 - textHover)
         ctx.font = `${canvas.width/50}px ${settings[1]}`
-        console.log(settings[1])
         ctx.fillText(`Font: ${settings[1]}.`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
-        ctx.fillText(`Effects: ${settings[0] == 0.2 ? "On" : "Off"}`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*2 - textHover)
-        ctx.fillText("[Back to menu]", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 3 - textHover)
-
-        textHoverChange *= Math.abs(textHover) > 10 ? -1 : 1
-        textHover += textHoverChange
+        ctx.fillText(`Screen Effects: ${settings[0] == 0.2 ? "On" : "Off"}`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*2 - textHover)
+        ctx.fillText(`Particles: ${settings[2] == 1 ? "On" : "Off"}`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*3 - textHover)
+        ctx.fillText("[Back to menu]", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 4 - textHover)
 
         for (i=0; i<canvas.width/5; i++) {
             ctx.strokeStyle = "green"
@@ -781,22 +1006,18 @@ function animate() {
             ctx.stroke()
         }
     } else if (credits) {
-        for (i=0; i<3; i++) {
+        for (i=1; i<2; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
                 menuHovering = i
                 break;
-            }
-
-            if (i==2) {
-                menuHovering = -1
             }
         }
 
         ctx.fillStyle = "rgb(50, 150, 50)"
         ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-        ctx.fillStyle = "rgba(0, 0, 0, 0.3)"
-        if (menuHovering == 1) {
+        if (i != 2) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.3)"
             ctx.fillRect(0, canvas.height/2 + canvas.width/25*(menuHovering) - textHover + canvas.height/60, canvas.width, canvas.width/25)
         }
 
@@ -806,9 +1027,6 @@ function animate() {
         ctx.font = `${canvas.width/50}px ${settings[1]}`
         ctx.fillText("Programming/Game Assets - @rockwill", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
         ctx.fillText("[Back to menu]", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 2 - textHover)
-
-        textHoverChange *= Math.abs(textHover) > 10 ? -1 : 1
-        textHover += textHoverChange
 
         for (i=0; i<canvas.width/5; i++) {
             ctx.strokeStyle = "green"
@@ -858,7 +1076,7 @@ function animate() {
             ctx.stroke()
         }
     } else {
-        for (i=0; i<3; i++) {
+        for (i=0; i<4; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
                 menuHovering = i
                 break;
@@ -882,11 +1100,9 @@ function animate() {
         ctx.fillText("A Quiet Flowerbed.", canvas.width/2 - (canvas.width/20*5), canvas.height/2 - canvas.width/20 - textHover)
         ctx.font = `${canvas.width/50}px ${settings[1]}`
         ctx.fillText("Settings.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
-        ctx.fillText("Start.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 2 - textHover)
+        ctx.fillText(flowerCost == 1 && points == 0 ? "New Game." : "Resume Game.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 2 - textHover)
         ctx.fillText("Credits.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 3 - textHover)
-
-        textHoverChange *= Math.abs(textHover) > 10 ? -1 : 1
-        textHover += textHoverChange
+        ctx.fillText("Clear Save Data.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 4 - textHover)
 
         for (i=0; i<canvas.width/5; i++) {
             ctx.strokeStyle = "green"
@@ -937,6 +1153,53 @@ function animate() {
         }
     }
     
+    cutscenes[cutscene]()
+
+    for (i=0; i<=canvas.height/3; i++) {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${settings[0]})`
+        ctx.lineWidth = canvas.width/500
+        ctx.beginPath()
+        ctx.moveTo(0, i*3)
+        ctx.lineTo(canvas.width, i*3)
+        ctx.closePath()
+        ctx.stroke()
+    }
+
+    textHoverChange *= Math.abs(textHover) > 10 ? -1 : 1
+    textHover += textHoverChange
+
+    editMode = alt && running
+    if (editMode) {
+        ctx.fillStyle = "rgba(0, 0, 255, 0.2)"
+        ctx.beginPath()
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.closePath()
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
+        ctx.strokeStyle = "black"
+        ctx.fillRect(canvas.width*0.8, 0, canvas.width*0.2, canvas.height)
+        ctx.beginPath()
+        ctx.moveTo(canvas.width*0.8, 0)
+        ctx.lineTo(canvas.width*0.8, canvas.height)
+        ctx.closePath()
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(canvas.width*0.8, canvas.height*0.33)
+        ctx.lineTo(canvas.width, canvas.height*0.33)
+        ctx.closePath()
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(canvas.width*0.8, canvas.height*0.67)
+        ctx.lineTo(canvas.width, canvas.height*0.67)
+        ctx.closePath()
+        ctx.stroke()
+        ctx.fillStyle = "white"
+        ctx.font = `${canvas.width/30}px ${settings[1]}`
+        ctx.fillText("Delete", canvas.width*0.85, canvas.height*0.165)
+        ctx.fillText("Range +", canvas.width*0.85, canvas.height*0.498)
+        ctx.fillText("Speed + ", canvas.width*0.85, canvas.height*0.832)
+    }
+
     ctx.strokeStyle = "black"
     ctx.beginPath()
     ctx.arc(mousePos.x, mousePos.y, canvas.width/100, 0, 2*Math.PI)
@@ -944,16 +1207,6 @@ function animate() {
     ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
     ctx.fill()
     ctx.stroke()
-
-    for (i=0; i<=canvas.height/3; i++) {
-        ctx.strokeStyle = `rgba(255, 255, 255, ${settings[0]})`
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.moveTo(0, i*3)
-        ctx.lineTo(canvas.width, i*3)
-        ctx.closePath()
-        ctx.stroke()
-    }
 }
 
 animate()
