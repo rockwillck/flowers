@@ -39,6 +39,7 @@ class Flower {
         localStorage.fC = flowerCost
 
         this.justCreated = true
+        this.autoed = false
     }
 }
 
@@ -69,6 +70,8 @@ class Golem {
         this.cost = autoCosts[0]
         autoCosts[0] = Math.round(autoCosts[0]*1.25)
         this.direction = 1
+        this.phase = 0
+        this.upgradeCount = 0
     }
 
     draw() {
@@ -96,18 +99,41 @@ class Golem {
         ctx.fill()
         ctx.stroke()
         if (frame - this.last >= this.freq*(editMode ? 10 : 1)) {
-            if (points >= flowerCost) {
-                clear = true
-                flowers.forEach((flower) => {
-                    if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (flower.growth*fR/10 * 6 + this.range)**2) {
-                        clear = false
+            if (this.phase == 0) {
+                if (points >= flowerCost) {
+                    clear = true
+                    flowers.forEach((flower, index) => {
+                        if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (flower.growth*fR/10 * 6)**2) {
+                            clear = false
+                        }
+                    })
+    
+                    if (clear) {
+                        x = new Flower(this.pos.x, this.pos.y, 1)
+                        x.autoed = true
+                        flowers.push(x)
+                        this.last = frame
+                        this.phase = 1
+                    }
+                }
+            } else {
+                flowers.forEach((flower, index) => {
+                    if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (flower.growth*fR/10 * 6 + this.range)**2 && flower.growth >= flowerThresh) {
+                        flowers.splice(index, 1)
+                        flowersPicked += 1
+                        localStorage.fP = flowersPicked
+                        if (settings[2]) {
+                            for (i = 0; i<50; i++) {
+                                particles.push(new Particle(flower.pos.x, flower.pos.y, "rgba(150, 255, 150)"))
+                            }
+                        }
+                        this.last = frame
+                        this.phase = 0
                     }
                 })
-
-                if (clear) {
-                    flowers.push(new Flower(this.pos.x, this.pos.y, 1))
-                    this.last = frame
-                }
+            }
+            if (frame - this.last >= 3*this.freq*(editMode ? 10 : 1)) {
+                this.phase = this.phase == 0 ? 1 : 0
             }
         }
     }
@@ -123,6 +149,7 @@ class Ghost {
         this.cost = autoCosts[2]
         autoCosts[2] = Math.round(autoCosts[2]*1.25)
         this.direction = 1
+        this.upgradeCount = 0
     }
 
     draw() {
@@ -181,6 +208,7 @@ class Cloud {
         this.last = frame
         this.cost = autoCosts[1]
         autoCosts[1] = Math.round(autoCosts[1]*1.25)
+        this.upgradeCount = 0
     }
 
     draw() {
@@ -220,7 +248,7 @@ class Cloud {
         if (frame - this.last >= this.freq*(editMode ? 10 : 1)) {
             clear = false
             flowers.forEach((flower, index) => {
-                if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (fR + flower.growth + this.range)**2 && !clear && flower.growth < flowerThresh) {
+                if ((flower.pos.x - this.pos.x)**2 + (flower.pos.y - this.pos.y)**2 <= (flower.growth*fR/10 * 6 + this.range)**2 && !clear && flower.growth < flowerThresh) {
                     clear = true
                     flower.growth += 1
                     if (settings[2]) {
@@ -242,18 +270,28 @@ mousePos = {
 
 var alt = false
 window.addEventListener("keydown", function(event) {
-    if (cm) {
         if (event.key == "ArrowUp" || event.key == "w") {
-            cmSelect = cmSelect > 0 ? cmSelect - 1 : cmRows.length - 1
+            if (cm) {
+                cmSelect = cmSelect > 0 ? cmSelect - 1 : cmRows.length - 1
+            }
+            if (alt) {
+                altSelected = altSelected > 0 ? (altSelected - 1) : 2
+            }
         } else if (event.key == "ArrowDown" || event.key == "s") {
-            cmSelect = (cmSelect + 1) % cmRows.length
+            if (cm) {
+                cmSelect = (cmSelect + 1) % cmRows.length
+            }
+            if (alt) {
+                altSelected = (altSelected + 1) % 3
+            }
         } else if (event.key == "Enter") {
-            cm = false
-            cmSelected = cmSelect
+            if (cm) {
+                cm = false
+                cmSelected = cmSelect
+            }
         }
-    }
     if (event.key == "Alt") {
-        alt = true
+        alt = alt ? false : true
     }
 
     if (event.code == "KeyQ" && alt) {
@@ -266,16 +304,17 @@ window.addEventListener("keydown", function(event) {
     if (event.key == " ") {
         if (cutscene == 1) {
             cutscene = 3
+        } else if (cutscene == 7) {
+            cutscene = 8
         } else {
             cutscene = 0
         }
+        showingDialogue = -1
+        dialogueX = {}
     }
 })
 
 window.addEventListener("keyup", function(event) {
-    if (event.key == "Alt") {
-        alt = false
-    }
 })
 
 var menuHovering = -1
@@ -296,6 +335,7 @@ window.addEventListener("mousemove", function(event) {
 
 var credits = false
 var clearMenu = false
+var showingDialogue = -1
 window.addEventListener("click", function(event) {
     var rect = canvas.getBoundingClientRect();
     mouseX = ((event.clientX - rect.left)/(window.innerWidth - rect.left*2))*canvas.width
@@ -308,13 +348,53 @@ window.addEventListener("click", function(event) {
         if (alt) {
             autos.forEach((auto, index) => {
                 if ((auto.pos.x - mouseX)**2 + (auto.pos.y - mouseY) ** 2 <= (auto.range)**2) {
-                    points += auto.cost*0.8
-                    localStorage.points = points
-                    autos.splice(index, 1)
-                    messages.push(new Message(`+ $${auto.cost*0.8}`, 1))
-                    if (settings[2]) {
-                        for (i = 0; i<50; i++) {
-                            particles.push(new Particle(mouseX, mouseY, "gray"))
+                    if (altSelected == 0) {
+                        points += Math.round(auto.cost*0.8 + auto.upgradeCount)
+                        localStorage.points = points
+                        autos.splice(index, 1)
+                        messages.push(new Message(`+ $${Math.round(auto.cost*0.8 + auto.upgradeCount)}`, 1))
+                        if (settings[2]) {
+                            for (i = 0; i<50; i++) {
+                                particles.push(new Particle(mouseX, mouseY, "gray"))
+                            }
+                        }
+                    } else if (altSelected == 1) {
+                        upCost = 0
+                        autos.forEach((auto) => {
+                            upCost += auto.range
+                        })
+                        upCost = Math.round(upCost * 2) == 0 ? 59 : Math.round(upCost * 2)
+                        if (points >= upCost) {
+                            points -= upCost
+                            localStorage.points = points
+                            auto.range *= 1.1
+                            auto.upgradeCount += 1
+                            if (settings[2]) {
+                                for (i = 0; i<50; i++) {
+                                    particles.push(new Particle(mouseX, mouseY, "gray"))
+                                }
+                            }
+                        } else {
+                            messages.push(new Message("That costs too much.", 0))
+                        }
+                    } else if (altSelected == 2) {
+                        upCost = 0
+                        autos.forEach((auto) => {
+                            upCost += 100/auto.freq
+                        })
+                        upCost = Math.round(upCost * 100) == 0 ? 50 : Math.round(upCost * 100)
+                        auto.upgradeCount += 1
+                        if (points >= upCost) {
+                            points -= upCost
+                            localStorage.points = points
+                            auto.freq *= 0.9
+                            if (settings[2]) {
+                                for (i = 0; i<50; i++) {
+                                    particles.push(new Particle(mouseX, mouseY, "gray"))
+                                }
+                            }
+                        } else {
+                            messages.push(new Message("That costs too much.", 0))
                         }
                     }
                     clear = false
@@ -394,13 +474,13 @@ window.addEventListener("click", function(event) {
             }
         }
     } else if (cutscene == 0) {
-        if (menuHovering == 1 && !credits && !settingsMenu && !clearMenu) {
+        if (menuHovering == 1 && !credits && !settingsMenu && !clearMenu && !dialogueMenu) {
             running = true
-        } else if (menuHovering == 1 && !settingsMenu && credits) {
+        } else if (menuHovering == 1 && credits) {
             credits = false
-        } else if (menuHovering == 2 && !settingsMenu) {
+        } else if (menuHovering == 2 && !settingsMenu && !dialogueMenu) {
             credits = true
-        } else if (menuHovering == 0 && !settingsMenu && !clearMenu) {
+        } else if (menuHovering == 0 && !settingsMenu && !clearMenu && !dialogueMenu) {
             settingsMenu = true
         } else if (menuHovering == 2 && settingsMenu) {
             settings[2] = settings[2] ? 0 : 1 
@@ -415,7 +495,12 @@ window.addEventListener("click", function(event) {
             textHoverChange = textHoverChange == 0 ? 0.5 : 0
             textHover = 0
             localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
-        } else if (menuHovering == 3) {
+        } else if (menuHovering == 3 && !dialogueMenu) {
+            dialogueMenu = true
+        } else if (menuHovering == 0 && dialogueMenu) {
+            dialogueMenu = false
+            showingDialogue = -1
+        } else if (menuHovering == 4 && !dialogueMenu) {
             clearMenu = true
         } else if (menuHovering == 1 && clearMenu) {
             clearMenu = false
@@ -433,6 +518,8 @@ window.addEventListener("click", function(event) {
                 localStorage.removeItem(key)
             })
             window.location.reload()
+        } else if (dialogueMenu) {
+            showingDialogue = menuHovering - 1
         }
     }
 });
@@ -485,9 +572,13 @@ function roundRect(x, y, width, height) {
 }
 
 let dialogueX = {}
-function dialogue(title, text) {
+var dialogues = []
+function dialogue(title, text, x=true) {
     if (typeof(dialogueX[title]) == "undefined") {
         dialogueX[title] = 0
+        if (x) {
+            dialogues.push([title, text])
+        }
     }
     x = dialogueX[title]
     ctx.fillStyle = "rgba(150, 115, 0, 0.9)"
@@ -536,7 +627,7 @@ function tutorialWater() {
 }
 
 function tutorialAuto() {
-    dialogue("Automation", "How I thirst to weed and plant with my own raw hands...[enter]But this body fails me...[enter]Perhaps some automation is in good taste...[enter]Golems for planting...[enter]Ghosts for weedings...[enter]Trees for watering...[enter][enter][emphasis]Maybe another right click over grass? [enter][emphasis]An [Alternate] CLICK to destroy them...")
+    dialogue("Automation", "How I thirst to use only my raw hands...[enter]But this body fails me...[enter]Perhaps some automation is in good taste...[enter]Golems for planting...[enter]Ghosts for weedings...[enter]Trees for watering...[enter][enter][emphasis]Maybe another right click over grass? [enter][emphasis]It is an ALTERNATIVE solution...")
 }
 
 let opacity = 0.1
@@ -567,9 +658,40 @@ function open() {
     }
 }
 
-var cutscene = 2
-const cutscenes = [blank, intro, open, tutorialWeed, tutorialFlower, tutorialWater, tutorialAuto]
+function close() {
+    dialogue("Rest", "And now I can finally rest.[enter]Flowers for my stone family...[enter]And flowers for me.[enter]Now...[enter][emphasis]I can finally join them in the family cemetery.")
+}
 
+let scroll = canvas.height
+let blinkOpac = 0
+let bC = 0.05
+const creditLines = ["Development - @rockwill", "Writing - @rockwill", "Music - @rockwill", "Creating this credits page - @rockwill", "Literally everything - @rockwill", "That one tagalong - @bob", "Thank you for playing..."]
+function creditS() {
+    ctx.fillStyle = `rgba(0, 0, 0, ${(canvas.height - scroll)/(canvas.height/5)})`
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = "white"
+    ctx.font = `${canvas.width/15}px ${settings[1]}`
+    ctx.fillText("Credits", canvas.width*0.1, canvas.height*0.1 + scroll)
+    creditLines.forEach((c, i) => {
+        ctx.font = `${canvas.width/45}px ${settings[1]}`
+        ctx.fillText(c, canvas.width*0.1, canvas.height*0.1 + canvas.width/22.5*(i + 1) + scroll)
+    })
+    ctx.fillStyle = "gray"
+    roundRect(canvas.width*0.7, (scroll <= canvas.height*0.7 ? canvas.height*0.7 : scroll), canvas.width*0.2, canvas.height*0.5)
+    ctx.fillStyle = "white"
+    ctx.fillText("RIP Bob.", canvas.width*0.755,(scroll <= canvas.height*0.7 ? canvas.height*0.7 : scroll) + 0.125*canvas.height)
+    ctx.fillStyle = `rgba(255, 255, 255, ${blinkOpac})`
+    ctx.fillText("[SPACE] to skip.", canvas.width*0.71625,(scroll <= canvas.height*0.7 ? canvas.height*0.7 : scroll) + 0.2*canvas.height)
+    scroll -= canvas.height/250
+    bC *= blinkOpac >= 1 || blinkOpac < 0 ? -1 : 1
+    blinkOpac += bC
+}
+
+var cutscene = 2
+const cutscenes = [blank, intro, open, tutorialWeed, tutorialFlower, tutorialWater, tutorialAuto, close, creditS]
+
+var dialogueMenu = false
+var altSelected = 0
 var particles = []
 var settingsMenu = false
 const setPre = localStorage.settings
@@ -605,6 +727,7 @@ var cmSelect = 0
 var cmSelected = -1
 var autoCosts = [10, 10, 10]
 const cmRows = [`Planter Golem`, `Cloud Tree`, `Ghost`]
+const cmDescriptions = ["Plants flowers[enter]Harvests flowers.", "Waters flowers.", "Picks weeds."]
 var autos = []
 var editMode = false
 function animate() {
@@ -673,6 +796,9 @@ function animate() {
         if (Math.floor(flowersPicked/boqCount) > boq) {
             messages.push(new Message("You made a new bouquet!", 2))
             boq = Math.floor(flowersPicked/boqCount)
+            if (boq >= 3) {
+                cutscene = 7
+            }
         }
     
         for(i = 0; i<rows; i++) {
@@ -783,8 +909,10 @@ function animate() {
                 ctx.closePath()
                 ctx.stroke()
             } else {
+                if (!flower.autoed) {
+                    messages.push(new Message(["Can't plant there.", "That's not dirt.", "Invalid plantery."][Math.floor(Math.random()*3)], 0))
+                }
                 flowers.splice(index, 1)
-                messages.push(new Message(["Can't plant there.", "That's not dirt.", "Invalid plantery."][Math.floor(Math.random()*3)], 0))
                 points += flower.cost
                 localStorage.points = points
                 flowerCost = flower.cost
@@ -793,18 +921,6 @@ function animate() {
         })
     
         autos.forEach((auto, index) => {
-            if (alt) {
-                ctx.beginPath()
-                ctx.arc(auto.pos.x, auto.pos.y, auto.range*2, 0, 2*Math.PI)
-                ctx.closePath()
-                ctx.fillStyle = "white"
-                ctx.fill()
-                ctx.moveTo(auto.pos.x - auto.range*2, auto.pos.y)
-                ctx.lineTo(auto.pos.x + auto.range*2, auto.pos.y)
-                ctx.moveTo(auto.pos.x, auto.pos.y - auto.range*2)
-                ctx.lineTo(auto.pos.x, auto.pos.y + auto.range*2)
-                ctx.stroke()
-            }
             auto.draw()
         })
 
@@ -872,9 +988,95 @@ function animate() {
                 ctx.fillStyle = cmSelect == i ? "white" : "black"
                 ctx.fillText(cmRows[i] + ` - $${autoCosts[i]}`, mouseX + xO + canvas.width/75, mouseY + canvas.height/20*i + yO + canvas.height/37.5)
             }
+            ctx.fillStyle = "white"
+            ctx.fillRect(mouseX + canvas.width/6 + xO, mouseY + yO, canvas.width/6, canvas.height/20 * cmRows.length)
+            ctx.strokeRect(mouseX + canvas.width/6 + xO, mouseY + yO, canvas.width/6, canvas.height/20 * cmRows.length)
+            ctx.fillStyle = "black"
+            cmDescriptions[cmSelect].split("[enter]").forEach((line, index) => {
+                ctx.fillText(line, mouseX + canvas.width/6 + xO + canvas.width/75, mouseY + canvas.width/105 + canvas.width/60*(index+1) + yO)
+            })
         }
     
         frame += 1
+    } else if (dialogueMenu) {
+        menuHovering = -1
+        for (i=0; i<=dialogues.length; i++) {
+            if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
+                menuHovering = i
+                break;
+            }
+        }
+
+        ctx.fillStyle = "rgb(50, 150, 50)"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        if (menuHovering != -1) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.3)"
+            ctx.fillRect(0, canvas.height/2 + canvas.width/25*(menuHovering) - textHover + canvas.height/60, canvas.width, canvas.width/25)
+        }
+
+        ctx.fillStyle = "white"
+        ctx.font = `${canvas.width/20}px ${settings[1]}`
+        ctx.fillText("The Dialogues.", canvas.width/2 - (canvas.width/20*5), canvas.height/2 - canvas.width/20 - textHover)
+        ctx.font = `${canvas.width/50}px ${settings[1]}`
+        ctx.fillText("Back.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
+        ctx.fillStyle = "black"
+        ctx.fillText(dialogues.length == 0 ? "No dialogues yet..." : "", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*(2) - textHover)
+        dialogues.forEach((dialogue, index) => {
+            ctx.fillText(dialogue[0], canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*(index + 2) - textHover)
+        })
+
+        if (showingDialogue != -1 && typeof(dialogues[showingDialogue]) != "undefined") {
+            dialogue(dialogues[showingDialogue][0], dialogues[showingDialogue][1], false)
+        }
+
+        for (i=0; i<canvas.width/5; i++) {
+            ctx.strokeStyle = "green"
+            ctx.beginPath()
+            ctx.moveTo(i*5, canvas.height)
+            ctx.lineTo(i*5 + textHover*0.3*-1, canvas.height*0.98)
+            ctx.closePath()
+            ctx.stroke()
+        }
+
+        for (i=0.5; i<canvas.width/37; i++) {
+            ctx.strokeStyle = "white"
+            ctx.beginPath()
+            ctx.moveTo(i*37, canvas.height)
+            ctx.lineTo(i*37 + textHover*0.3*-1, canvas.height*0.92)
+            ctx.closePath()
+            ctx.stroke()
+
+            ctx.strokeStyle = "black"
+            ctx.fillStyle = "white"
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1 - canvas.height/50, canvas.height*0.92, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1 + canvas.height/50, canvas.height*0.92, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1, canvas.height*0.90, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1, canvas.height*0.94, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+
+            ctx.fillStyle = `hsl(${255*i/37}, 50%, 50%)`
+            ctx.beginPath()
+            ctx.arc(i*37 + textHover*0.3*-1, canvas.height*0.92, canvas.width/100, 0, 2*Math.PI)
+            ctx.closePath()
+            ctx.fill()
+            ctx.stroke()
+        }
     } else if (clearMenu) {
         for (i=0; i<2; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
@@ -1040,7 +1242,7 @@ function animate() {
         ctx.font = `${canvas.width/20}px ${settings[1]}`
         ctx.fillText("The Credits.", canvas.width/2 - (canvas.width/20*5), canvas.height/2 - canvas.width/20 - textHover)
         ctx.font = `${canvas.width/50}px ${settings[1]}`
-        ctx.fillText("Programming/Game Assets - @rockwill", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
+        ctx.fillText("Created by @rockwill.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
         ctx.fillText("[Back to menu]", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 2 - textHover)
 
         for (i=0; i<canvas.width/5; i++) {
@@ -1091,7 +1293,7 @@ function animate() {
             ctx.stroke()
         }
     } else {
-        for (i=0; i<4; i++) {
+        for (i=0; i<5; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
                 menuHovering = i
                 break;
@@ -1117,7 +1319,8 @@ function animate() {
         ctx.fillText("Settings.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
         ctx.fillText(flowerCost == 1 && points == 0 ? "New Game." : "Resume Game.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 2 - textHover)
         ctx.fillText("Credits.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 3 - textHover)
-        ctx.fillText("Clear Save Data.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 4 - textHover)
+        ctx.fillText("Discovered Dialogues.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 4 - textHover)
+        ctx.fillText("Clear Save Data.", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 5 - textHover)
 
         for (i=0; i<canvas.width/5; i++) {
             ctx.strokeStyle = "green"
@@ -1170,14 +1373,6 @@ function animate() {
     
     cutscenes[cutscene]()
 
-    ctx.strokeStyle = "black"
-    ctx.beginPath()
-    ctx.arc(mousePos.x, mousePos.y, canvas.width/100, 0, 2*Math.PI)
-    ctx.closePath()
-    ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
-    ctx.fill()
-    ctx.stroke()
-
     for (i=0; i<=canvas.height/3; i++) {
         ctx.strokeStyle = `rgba(255, 255, 255, ${settings[0]})`
         ctx.lineWidth = canvas.width/500
@@ -1193,11 +1388,55 @@ function animate() {
 
     editMode = alt && running
     if (editMode) {
-        ctx.fillStyle = "rgba(255, 0, 0, 0.2)"
+        ctx.fillStyle = "rgba(0, 0, 255, 0.2)"
         ctx.beginPath()
         ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.closePath()
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
+        ctx.strokeStyle = "black"
+        ctx.beginPath()
+        ctx.fillRect(canvas.width*0.8, 0, canvas.width*0.2, canvas.height/3)
+        ctx.strokeRect(canvas.width*0.8, 0, canvas.width*0.2, canvas.height/3)
+        ctx.closePath()
+        ctx.beginPath()
+        ctx.fillRect(canvas.width*0.8, canvas.height/3, canvas.width*0.2, canvas.height/3)
+        ctx.strokeRect(canvas.width*0.8, canvas.height/3, canvas.width*0.2, canvas.height/3)
+        ctx.closePath()
+        ctx.beginPath()
+        ctx.fillRect(canvas.width*0.8, canvas.height/3 * 2, canvas.width*0.2, canvas.height/3)
+        ctx.strokeRect(canvas.width*0.8, canvas.height/3 * 2, canvas.width*0.2, canvas.height/3)
+        ctx.closePath()
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
+        ctx.beginPath()
+        ctx.fillRect(canvas.width*0.8, canvas.height*(1/3*altSelected), canvas.width*0.2, canvas.height/3)
+        ctx.strokeRect(canvas.width*0.8, canvas.height*(1/3*altSelected), canvas.width*0.2, canvas.height/3)
+        ctx.closePath()
+        ctx.fillStyle = "rgb(250, 150, 150)"
+        ctx.font = `${canvas.width/60}px ${settings[1]}`
+        ctx.fillText("      Delete", canvas.width*0.85, canvas.height*0.165)
+        ctx.fillStyle = "white"
+        upCost = 0
+        autos.forEach((auto) => {
+            upCost += auto.range
+        })
+        upCost = Math.round(upCost * 2) == 0 ? 59 : Math.round(upCost * 2)
+        ctx.fillText(`Range + ($${upCost})`, canvas.width*0.85, canvas.height*0.498)
+        upCost = 0
+        autos.forEach((auto) => {
+            upCost += 100/auto.freq
+        })
+        upCost = Math.round(upCost * 100) == 0 ? 50 : Math.round(upCost * 100)
+        ctx.fillText(`Rate + ($${upCost})`, canvas.width*0.85, canvas.height*0.832)
     }
+
+    ctx.strokeStyle = "black"
+    ctx.beginPath()
+    ctx.arc(mousePos.x, mousePos.y, canvas.width/100, 0, 2*Math.PI)
+    ctx.closePath()
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
+    ctx.fill()
+    ctx.stroke()
 }
 
 animate()
