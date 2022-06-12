@@ -63,19 +63,21 @@ class Message {
 }
 
 class Golem {
-    constructor(x, y, newInst=true, cost=autoCosts[0]) {
+    constructor(x, y, newInst=true, cost=autoCosts[0], freq=200, range=canvas.width/35, uC=0) {
         this.pos = {x:x, y:y}
-        this.freq = 200
+        this.freq = freq
         this.speed = canvas.height/100
-        this.range = canvas.width/35
+        this.range = range
         this.last = frame
         this.cost = cost
         if (newInst) {
             autoCosts[0] = Math.round(autoCosts[0]*1.25)
+            localStorage.aC = `${autoCosts[0]},${autoCosts[1]},${autoCosts[2]}`
         }
         this.direction = 1
         this.phase = 0
-        this.upgradeCount = 0
+        this.upgradeCount = uC
+        this.type = "golem"
     }
 
     draw() {
@@ -146,18 +148,20 @@ class Golem {
 }
 
 class Ghost {
-    constructor(x, y, newInst=true, cost=autoCosts[2]) {
+    constructor(x, y, newInst=true, cost=autoCosts[2], freq=200, range=canvas.width/35, uC=0) {
         this.pos = {x:x, y:y}
-        this.freq = 200
+        this.freq = freq
         this.speed = canvas.height/100
-        this.range = canvas.width/35
+        this.range = range
         this.last = frame
         this.cost = cost
         if (newInst) {
             autoCosts[2] = Math.round(autoCosts[2]*1.25)
+            localStorage.aC = `${autoCosts[0]},${autoCosts[1]},${autoCosts[2]}`
         }       
         this.direction = 1
-        this.upgradeCount = 0
+        this.upgradeCount = uC
+        this.type = "ghost"
     }
 
     draw() {
@@ -185,6 +189,7 @@ class Ghost {
                 if ((weed.pos.x - this.pos.x)**2 + (weed.pos.y - this.pos.y)**2 <= (fR + this.range)**2 && !clear) {
                     clear = true
                     weeds.splice(index, 1)
+                    saveWeeds()
                     setTimeout(() => {
                         weedsLS = ""
                         weeds.forEach((weed) => {
@@ -209,16 +214,18 @@ class Ghost {
 }
 
 class Cloud {
-    constructor(x, y, newInst=true, cost=autoCosts[1]) {
+    constructor(x, y, newInst=true, cost=autoCosts[1], freq=100, range=canvas.width/35, uC=0) {
         this.pos = {x:x, y:y}
-        this.freq = 100
-        this.range = canvas.width/35
+        this.freq = freq
+        this.range = range
         this.last = frame
         this.cost = cost
         if (newInst) {
             autoCosts[1] = Math.round(autoCosts[1]*1.25)
+            localStorage.aC = `${autoCosts[0]},${autoCosts[1]},${autoCosts[2]}`
         }
-        this.upgradeCount = 0
+        this.upgradeCount = uC
+        this.type = "cloud"
     }
 
     draw() {
@@ -421,6 +428,7 @@ window.addEventListener("click", function(event) {
                 weed = weeds[index]
                 if ((weed.pos.x - mouseX)**2 + (weed.pos.y - mouseY)**2 <= flowerRadius**2*2) {
                     weeds.splice(index, 1)
+                    saveWeeds()
                     points += 1
                     localStorage.points = points
                     clear = false
@@ -656,14 +664,61 @@ function saveFlowers() {
 function restoreFlowers() {
     if (localStorage.flowers) {
         flowerSave = localStorage.flowers.split("|")
-        console.log(flowerSave)
         if (flowerSave.length > 1) {
             for(i=0; i<flowerSave.length/6 - 1; i++) {
                 x = new Flower(parseFloat(flowerSave[i*6 + 0]), parseFloat(flowerSave[i*6 + 1]), parseInt(flowerSave[i*6 + 2]), false, parseInt(flowerSave[i*6 + 4]))
                 x.autoed = flowerSave[i*6 + 5]
                 x.color = flowerSave[i*6 + 3]
-                console.log(x)
                 flowers.push(x)
+            }
+        }
+    }
+}
+
+function saveWeeds() {
+    weedSave = ""
+    weeds.forEach((weed) => {
+        weedSave += weed.pos.x + "|" + weed.pos.y + "|"
+    })
+
+    localStorage.weeds = weedSave
+}
+
+function restoreWeeds() {
+    if (localStorage.weeds) {
+        weedSave = localStorage.weeds.split("|")
+        if (weedSave.length > 1) {
+            for(i=0; i<weedSave.length/2 - 1; i++) {
+                x = new Weed(parseFloat(weedSave[i*2 + 0]), parseFloat(weedSave[i*2 + 1]))
+                weeds.push(x)
+            }
+        }
+    }
+}
+
+function saveAutos() {
+    autoSave = ""
+    autos.forEach((auto) => {
+        autoSave += auto.pos.x + "|" + auto.pos.y + "|" + auto.range + "|" + auto.cost + "|" + auto.upgradeCount + "|" + auto.freq + "|" + auto.type + "|"
+    })
+
+    localStorage.autos = autoSave
+}
+
+function restoreAutos() {
+    if (localStorage.autos) {
+        autoSave = localStorage.autos.split("|")
+        if (autoSave.length > 1) {
+            for(i=0; i<autoSave.length/7 - 1; i++) {
+                if (autoSave[i*7 + 6] == "golem") {
+                    x = new Golem(parseFloat(autoSave[i*7 + 0]), parseFloat(autoSave[i*7 + 1]), false, parseInt(autoSave[i*7 + 3]), parseFloat(autoSave[i*7 + 5]), parseFloat(autoSave[i*7 + 2]), parseInt(autoSave[i*7 + 4]))
+                } else if (autoSave[i*7 + 6] == "cloud") {
+                    x = new Cloud(parseFloat(autoSave[i*7 + 0]), parseFloat(autoSave[i*7 + 1]), false, parseInt(autoSave[i*7 + 3]), parseFloat(autoSave[i*7 + 5]), parseFloat(autoSave[i*7 + 2]), parseInt(autoSave[i*7 + 4]))
+                } else if (autoSave[i*7 + 6] == "ghost") {
+                    x = new Ghost(parseFloat(autoSave[i*7 + 0]), parseFloat(autoSave[i*7 + 1]), false, parseInt(autoSave[i*7 + 3]), parseFloat(autoSave[i*7 + 5]), parseFloat(autoSave[i*7 + 2]), parseInt(autoSave[i*7 + 4]))
+                }
+
+                autos.push(x)
             }
         }
     }
@@ -764,7 +819,7 @@ const flowerThresh = 5
 var cm = false
 var cmSelect = 0
 var cmSelected = -1
-var autoCosts = [10, 10, 10]
+var autoCosts = localStorage.aC ? [parseInt(localStorage.aC.split(",")[0]), parseInt(localStorage.aC.split(",")[1]), parseInt(localStorage.aC.split(",")[2])] : [10, 10, 10]
 const cmRows = [`Planter Golem`, `Cloud Tree`, `Ghost`]
 const cmDescriptions = ["Plants flowers[enter]Harvests flowers.", "Waters flowers.", "Picks weeds."]
 var autos = []
@@ -775,6 +830,8 @@ function animate() {
     if (running) {
         if (frame == 1) {
             restoreFlowers()
+            restoreWeeds()
+            restoreAutos()
             if (flowerCost == 1 && points == 0) {
                 cutscene = 1
             }
@@ -792,6 +849,8 @@ function animate() {
                 }
             }
         }
+
+        saveAutos()
         var now = Date.now();
         var dt = (now - lastUpdate)/30;
         lastUpdate = now;
@@ -1015,6 +1074,7 @@ function animate() {
             i = Math.floor(Math.random() * rows)
             rand = Math.random()
             weeds.push(new Weed(canvas.width/rows * (i + margin) + Math.random()*canvas.width/rows*(1-2*margin), margin*canvas.width/rows + Math.random()*(canvas.height - margin*canvas.width/rows*2)))
+            saveWeeds()
         }
     
         if (cm) {
@@ -1455,7 +1515,7 @@ function animate() {
         ctx.closePath()
         ctx.fillStyle = "rgb(250, 150, 150)"
         ctx.font = `${canvas.width/60}px ${settings[1]}`
-        ctx.fillText("      Delete", canvas.width*0.85, canvas.height*0.165)
+        ctx.fillText("     Delete", canvas.width*0.85, canvas.height*0.165)
         ctx.fillStyle = "white"
         upCost = 0
         autos.forEach((auto) => {

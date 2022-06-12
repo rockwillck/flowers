@@ -8,7 +8,7 @@ Usage:
 from setuptools import setup
 
 APP = ['A Quiet Flowerbed.py']
-DATA_FILES = ['index.html', 'game.js']
+DATA_FILES = ['index.html', 'game.js', 'python39.zip']
 OPTIONS = {'iconfile': '/Users/williamchoi-kim/Desktop/Personal/Coding/flowers/flower.icns'}
 
 setup(
