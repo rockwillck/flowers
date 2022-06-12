@@ -30,6 +30,16 @@
         z-index: 0;
         position: absolute;
     }
+
+    button#audioButton {
+        position:absolute;
+        z-index: 2;
+        left:0;
+        top:0;
+        width: 100%;
+        height:100%;
+        opacity:0;
+    }
 </style>
 <head>
     <title>A Quiet Flowerbed</title>
@@ -38,6 +48,7 @@
     <div class="canvas-container">
         <canvas id="canvas"></canvas>
     </div>
+    <button id="audioButton"></button>
 </body>
 <script id="script" src="game.js"></script>
 </html>

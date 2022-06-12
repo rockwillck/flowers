@@ -4,6 +4,13 @@ var rect = canvas.getBoundingClientRect();
 canvas.width = 1024
 canvas.height = 768
 var weedsLS
+
+function pushFx(fx) {
+    var audio = new Audio(fx)
+    audio.volume = settings[3]/10
+    audio.play();
+}
+
 class Particle {
     constructor(x, y, color) {
         this.pos = {x:x, y:y}
@@ -73,6 +80,7 @@ class Golem {
         if (newInst) {
             autoCosts[0] = Math.round(autoCosts[0]*1.25)
             localStorage.aC = `${autoCosts[0]},${autoCosts[1]},${autoCosts[2]}`
+            pushFx("auto.wav")
         }
         this.direction = 1
         this.phase = 0
@@ -158,6 +166,7 @@ class Ghost {
         if (newInst) {
             autoCosts[2] = Math.round(autoCosts[2]*1.25)
             localStorage.aC = `${autoCosts[0]},${autoCosts[1]},${autoCosts[2]}`
+            pushFx("auto.wav")
         }       
         this.direction = 1
         this.upgradeCount = uC
@@ -223,6 +232,7 @@ class Cloud {
         if (newInst) {
             autoCosts[1] = Math.round(autoCosts[1]*1.25)
             localStorage.aC = `${autoCosts[0]},${autoCosts[1]},${autoCosts[2]}`
+            pushFx("auto.wav")
         }
         this.upgradeCount = uC
         this.type = "cloud"
@@ -287,6 +297,8 @@ mousePos = {
 }
 
 var alt = false
+var altQ = false
+var enterClick = false
 window.addEventListener("keydown", function(event) {
         if (event.key == "ArrowUp" || event.key == "w") {
             if (cm) {
@@ -306,17 +318,20 @@ window.addEventListener("keydown", function(event) {
             if (cm) {
                 cm = false
                 cmSelected = cmSelect
+                enterClick = true
             }
         }
     if (event.key == "Alt") {
         alt = alt ? false : true
+        altQ = true
     }
 
-    if (event.code == "KeyQ" && alt) {
+    if (event.code == "KeyQ" && altQ) {
         running = false
         credits = false
         settingsMenu = false
         cutscene = 0
+        alt = false
     }
 
     if (event.key == " ") {
@@ -333,6 +348,9 @@ window.addEventListener("keydown", function(event) {
 })
 
 window.addEventListener("keyup", function(event) {
+    if (event.key == "Alt") {
+        altQ = false
+    }
 })
 
 var menuHovering = -1
@@ -355,193 +373,207 @@ var credits = false
 var clearMenu = false
 var showingDialogue = -1
 window.addEventListener("click", function(event) {
-    var rect = canvas.getBoundingClientRect();
-    mouseX = ((event.clientX - rect.left)/(window.innerWidth - rect.left*2))*canvas.width
-    mouseY = ((event.clientY - rect.top)/(window.innerHeight - rect.top*2))*canvas.height
-
-    if (running) {
-        altClicked = false
-        clear = true
-        autoClicked = false
-        if (alt) {
-            autos.forEach((auto, index) => {
-                if ((auto.pos.x - mouseX)**2 + (auto.pos.y - mouseY) ** 2 <= (auto.range)**2) {
-                    if (altSelected == 0) {
-                        points += Math.round(auto.cost*0.8 + auto.upgradeCount)
-                        localStorage.points = points
-                        autos.splice(index, 1)
-                        messages.push(new Message(`+ $${Math.round(auto.cost*0.8 + auto.upgradeCount)}`, 1))
-                        if (settings[2]) {
-                            for (i = 0; i<50; i++) {
-                                particles.push(new Particle(mouseX, mouseY, "gray"))
-                            }
-                        }
-                    } else if (altSelected == 1) {
-                        upCost = 0
-                        autos.forEach((auto) => {
-                            upCost += auto.range
-                        })
-                        upCost = Math.round(upCost * 2) == 0 ? 59 : Math.round(upCost * 2)
-                        if (points >= upCost) {
-                            points -= upCost
+    if (!enterClick) {
+        var rect = canvas.getBoundingClientRect();
+        mouseX = ((event.clientX - rect.left)/(window.innerWidth - rect.left*2))*canvas.width
+        mouseY = ((event.clientY - rect.top)/(window.innerHeight - rect.top*2))*canvas.height
+    
+        if (running) {
+            altClicked = false
+            clear = true
+            autoClicked = false
+            if (alt) {
+                autos.forEach((auto, index) => {
+                    if ((auto.pos.x - mouseX)**2 + (auto.pos.y - mouseY) ** 2 <= (auto.range)**2) {
+                        if (altSelected == 0) {
+                            points += Math.round(auto.cost*0.8 + auto.upgradeCount)
                             localStorage.points = points
-                            auto.range *= 1.1
+                            autos.splice(index, 1)
+                            pushFx("flower.wav")
+                            messages.push(new Message(`+ $${Math.round(auto.cost*0.8 + auto.upgradeCount)}`, 1))
+                            if (settings[2]) {
+                                for (i = 0; i<50; i++) {
+                                    particles.push(new Particle(mouseX, mouseY, "gray"))
+                                }
+                            }
+                        } else if (altSelected == 1) {
+                            upCost = 0
+                            autos.forEach((auto) => {
+                                upCost += auto.range
+                            })
+                            upCost = Math.round(upCost * 2) == 0 ? 59 : Math.round(upCost * 2)
+                            if (points >= upCost) {
+                                points -= upCost
+                                pushFx("auto.wav")
+                                localStorage.points = points
+                                auto.range *= 1.1
+                                auto.upgradeCount += 1
+                                if (settings[2]) {
+                                    for (i = 0; i<50; i++) {
+                                        particles.push(new Particle(mouseX, mouseY, "gray"))
+                                    }
+                                }
+                            } else {
+                                messages.push(new Message("That costs too much.", 0))
+                            }
+                        } else if (altSelected == 2) {
+                            upCost = 0
+                            autos.forEach((auto) => {
+                                upCost += 100/auto.freq
+                            })
+                            upCost = Math.round(upCost * 100) == 0 ? 50 : Math.round(upCost * 100)
+                            pushFx("auto.wav")
                             auto.upgradeCount += 1
+                            if (points >= upCost) {
+                                points -= upCost
+                                localStorage.points = points
+                                auto.freq *= 0.9
+                                if (settings[2]) {
+                                    for (i = 0; i<50; i++) {
+                                        particles.push(new Particle(mouseX, mouseY, "gray"))
+                                    }
+                                }
+                            } else {
+                                messages.push(new Message("That costs too much.", 0))
+                            }
+                        }
+                        clear = false
+                        autoClicked = true
+                    }
+                })
+            } else {
+                weedClicked = false
+                flowerPicked = false
+                for(i=0;i<weeds.length;i++) {
+                    flowerRadius = fR
+                    index = weeds.length - i - 1
+                    weed = weeds[index]
+                    if ((weed.pos.x - mouseX)**2 + (weed.pos.y - mouseY)**2 <= flowerRadius**2*2) {
+                        weeds.splice(index, 1)
+                        pushFx("weed.wav")
+                        saveWeeds()
+                        points += 1
+                        localStorage.points = points
+                        clear = false
+                        weedClicked = true
+                        if (localStorage.autoed != ":)" && points >= 10) {
+                            cutscene = 6
+                            localStorage.autoed = ":)"
+                        }
+                        break;
+                    }
+                }
+    
+                flowers.forEach((flower, index) => {
+                    flowerRadius = flower.growth*fR/10 * 6
+                    if ((flower.pos.x - mouseX)**2 + (flower.pos.y - mouseY)**2 <= flowerRadius**2*2) {
+                        if (flower.growth >= flowerThresh) {
+                            flowers.splice(index, 1)
+                            pushFx("flower.wav")
+                            flowersPicked += 1
+                            localStorage.fP = flowersPicked
                             if (settings[2]) {
                                 for (i = 0; i<50; i++) {
-                                    particles.push(new Particle(mouseX, mouseY, "gray"))
+                                    particles.push(new Particle(mouseX, mouseY, "rgba(150, 255, 150)"))
                                 }
                             }
-                        } else {
-                            messages.push(new Message("That costs too much.", 0))
-                        }
-                    } else if (altSelected == 2) {
-                        upCost = 0
-                        autos.forEach((auto) => {
-                            upCost += 100/auto.freq
-                        })
-                        upCost = Math.round(upCost * 100) == 0 ? 50 : Math.round(upCost * 100)
-                        auto.upgradeCount += 1
-                        if (points >= upCost) {
-                            points -= upCost
-                            localStorage.points = points
-                            auto.freq *= 0.9
-                            if (settings[2]) {
-                                for (i = 0; i<50; i++) {
-                                    particles.push(new Particle(mouseX, mouseY, "gray"))
-                                }
+                            if (flowersPicked == 1) {
+                                messages.push(new Message("You picked your first flower!", 1))
                             }
+                            saveFlowers()
                         } else {
-                            messages.push(new Message("That costs too much.", 0))
+                            messages.push(new Message("That flower needs to grow more.", 0))
                         }
+                        clear = false
+                        flowerPicked = true
                     }
-                    clear = false
-                    autoClicked = true
-                }
-            })
-        } else {
-            weedClicked = false
-            flowerPicked = false
-            for(i=0;i<weeds.length;i++) {
-                flowerRadius = fR
-                index = weeds.length - i - 1
-                weed = weeds[index]
-                if ((weed.pos.x - mouseX)**2 + (weed.pos.y - mouseY)**2 <= flowerRadius**2*2) {
-                    weeds.splice(index, 1)
-                    saveWeeds()
-                    points += 1
-                    localStorage.points = points
-                    clear = false
-                    weedClicked = true
-                    if (localStorage.autoed != ":)" && points >= 10) {
-                        cutscene = 6
-                        localStorage.autoed = ":)"
-                    }
-                    break;
-                }
-            }
-
-            flowers.forEach((flower, index) => {
-                flowerRadius = flower.growth*fR/10 * 6
-                if ((flower.pos.x - mouseX)**2 + (flower.pos.y - mouseY)**2 <= flowerRadius**2*2) {
-                    if (flower.growth >= flowerThresh) {
-                        flowers.splice(index, 1)
-                        flowersPicked += 1
-                        localStorage.fP = flowersPicked
-                        if (settings[2]) {
-                            for (i = 0; i<50; i++) {
-                                particles.push(new Particle(mouseX, mouseY, "rgba(150, 255, 150)"))
-                            }
-                        }
-                        if (flowersPicked == 1) {
-                            messages.push(new Message("You picked your first flower!", 1))
-                        }
+                })
+                if (clear) {
+                    if (points >= flowerCost) {
+                        points -= flowerCost
+                        localStorage.points = points
+                        flowers.push(new Flower(mouseX, mouseY, 1))
                         saveFlowers()
                     } else {
-                        messages.push(new Message("That flower needs to grow more.", 0))
+                        if (!cm) {
+                            messages.push(new Message(["You don't have enough points.", "Ya broke you poor peasant.", "Begging for flowers? Ha!"][Math.floor(Math.random()*3)], 0))
+                        }
+                        cm = false
                     }
-                    clear = false
-                    flowerPicked = true
-                }
-            })
-            if (clear) {
-                if (points >= flowerCost) {
-                    points -= flowerCost
-                    localStorage.points = points
-                    flowers.push(new Flower(mouseX, mouseY, 1))
-                    saveFlowers()
                 } else {
-                    if (!cm) {
-                        messages.push(new Message(["You don't have enough points.", "Ya broke you poor peasant.", "Begging for flowers? Ha!"][Math.floor(Math.random()*3)], 0))
-                    }
-                    cm = false
-                }
-            } else {
-                if (!flowerPicked) {
-                    if (weedClicked) {
-                        if (settings[2]) {
-                            for (i = 0; i<50; i++) {
-                                particles.push(new Particle(mouseX, mouseY, "red"))
+                    if (!flowerPicked) {
+                        if (weedClicked) {
+                            if (settings[2]) {
+                                for (i = 0; i<50; i++) {
+                                    particles.push(new Particle(mouseX, mouseY, "red"))
+                                }
                             }
+                            if (points == 1 && flowerCost == 1) {
+                                messages.push(new Message("You picked your first weed!", 1))
+                                cutscene = 4
+                            }
+                        } else if (!altClicked && !autoClicked) {
+                            messages.push(new Message((["There's already a flower there.", "Uh... can't overlap flowers...", "Stay calm and don't overlap the freaking flowers idiot!"])[Math.floor(Math.random()*3)], 0))
                         }
-                        if (points == 1 && flowerCost == 1) {
-                            messages.push(new Message("You picked your first weed!", 1))
-                            cutscene = 4
-                        }
-                    } else if (!altClicked && !autoClicked) {
-                        messages.push(new Message((["There's already a flower there.", "Uh... can't overlap flowers...", "Stay calm and don't overlap the freaking flowers idiot!"])[Math.floor(Math.random()*3)], 0))
                     }
                 }
             }
-        }
-    } else if (cutscene == 0) {
-        if (menuHovering == 1 && !credits && !settingsMenu && !clearMenu && !dialogueMenu) {
-            running = true
-        } else if (menuHovering == 1 && credits) {
-            credits = false
-        } else if (menuHovering == 2 && !settingsMenu && !dialogueMenu) {
-            credits = true
-        } else if (menuHovering == 0 && !settingsMenu && !clearMenu && !dialogueMenu) {
-            settingsMenu = true
-        } else if (menuHovering == 2 && settingsMenu) {
-            settings[2] = settings[2] ? 0 : 1 
-            localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
-        } else if (menuHovering == 3 && settingsMenu) {
-            settingsMenu = false
-        } else if (menuHovering == 0 && settingsMenu) { 
-            settings[1] = settings[1] == "Luminari" ? "Verdana" : "Luminari"
-            localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
-        } else if (menuHovering == 1 && settingsMenu) { 
-            settings[0] = settings[0] == 0.2 ? 0 : 0.2
-            textHoverChange = textHoverChange == 0 ? 0.5 : 0
-            textHover = 0
-            localStorage.settings = `${settings[0]},${settings[1]},${settings[2]}`
-        } else if (menuHovering == 3 && !dialogueMenu) {
-            dialogueMenu = true
-        } else if (menuHovering == 0 && dialogueMenu) {
-            dialogueMenu = false
-            showingDialogue = -1
-        } else if (menuHovering == 4 && !dialogueMenu) {
-            clearMenu = true
-        } else if (menuHovering == 1 && clearMenu) {
-            clearMenu = false
-        } else if (menuHovering == 0 && clearMenu) {
-            clearMenu = false
-            keys = []
-            for (var i = 0; i < localStorage.length; i++) {  
-                key = localStorage.key(i)
-                if(key != "settings") {       
-                    keys.push(key)
-                } 
+        } else if (cutscene == 0) {
+            if (menuHovering == 1 && !credits && !settingsMenu && !clearMenu && !dialogueMenu) {
+                running = true
+            } else if (menuHovering == 1 && credits) {
+                credits = false
+            } else if (menuHovering == 2 && !settingsMenu && !dialogueMenu) {
+                credits = true
+            } else if (menuHovering == 0 && !settingsMenu && !clearMenu && !dialogueMenu) {
+                settingsMenu = true
+            } else if (menuHovering == 2 && settingsMenu) {
+                settings[2] = settings[2] ? 0 : 1 
+                localStorage.settings = `${settings[0]},${settings[1]},${settings[2]},${settings[3]}`
+            } else if (menuHovering == 3 && settingsMenu) {
+                settings[3] = (settings[3] + 1) % 11
+                localStorage.settings = `${settings[0]},${settings[1]},${settings[2]},${settings[3]}`
+                pushFx("sfx.wav")
+            } else if (menuHovering == 4 && settingsMenu) {
+                settingsMenu = false
+            } else if (menuHovering == 0 && settingsMenu) { 
+                settings[1] = settings[1] == "Luminari" ? "Verdana" : "Luminari"
+                localStorage.settings = `${settings[0]},${settings[1]},${settings[2]},${settings[3]}`
+            } else if (menuHovering == 1 && settingsMenu) { 
+                settings[0] = settings[0] == 0.2 ? 0 : 0.2
+                textHoverChange = textHoverChange == 0 ? 0.5 : 0
+                textHover = 0
+                localStorage.settings = `${settings[0]},${settings[1]},${settings[2]},${settings[3]}`
+            } else if (menuHovering == 3 && !dialogueMenu) {
+                dialogueMenu = true
+            } else if (menuHovering == 0 && dialogueMenu) {
+                dialogueMenu = false
+                showingDialogue = -1
+            } else if (menuHovering == 4 && !dialogueMenu) {
+                clearMenu = true
+            } else if (menuHovering == 1 && clearMenu) {
+                clearMenu = false
+            } else if (menuHovering == 0 && clearMenu) {
+                clearMenu = false
+                keys = []
+                for (var i = 0; i < localStorage.length; i++) {  
+                    key = localStorage.key(i)
+                    if(key != "settings") {       
+                        keys.push(key)
+                    } 
+                }
+    
+                keys.forEach((key) => {
+                    localStorage.removeItem(key)
+                })
+                localStorage.resetReload = "stop being a nerd and go back to the game :|"
+                window.location.reload()
+            } else if (dialogueMenu) {
+                showingDialogue = menuHovering - 1
             }
-
-            keys.forEach((key) => {
-                localStorage.removeItem(key)
-            })
-            window.location.reload()
-        } else if (dialogueMenu) {
-            showingDialogue = menuHovering - 1
         }
+    } else {
+        enterClick = false
     }
 });
 
@@ -595,11 +627,19 @@ function roundRect(x, y, width, height) {
 
 let dialogueX = {}
 var dialogues = []
+if (localStorage.dialogue) {
+    for (i=0; i<localStorage.dialogue.split("|").length/2; i++) {
+        dialogues.push([localStorage.dialogue.split("|")[i*2], localStorage.dialogue.split("|")[i*2 + 1]])
+    }
+} else {
+    localStorage.dialogue = ""
+}
 function dialogue(title, text, x=true) {
     if (typeof(dialogueX[title]) == "undefined") {
         dialogueX[title] = 0
         if (x) {
             dialogues.push([title, text])
+            localStorage.dialogue += title + "|" + text + "|"
         }
     }
     x = dialogueX[title]
@@ -781,7 +821,8 @@ function creditS() {
     blinkOpac += bC
 }
 
-var cutscene = 2
+var cutscene = localStorage.resetReload ? 0 : 2
+localStorage.removeItem("resetReload")
 const cutscenes = [blank, intro, open, tutorialWeed, tutorialFlower, tutorialWater, tutorialAuto, close, creditS]
 
 var dialogueMenu = false
@@ -789,7 +830,7 @@ var altSelected = 0
 var particles = []
 var settingsMenu = false
 const setPre = localStorage.settings
-var settings = typeof(setPre) == "undefined" ? [0.2, "Luminari", 1] : [parseFloat(setPre.split(",")[0]), setPre.split(",")[1], parseInt(setPre.split(",")[2])]
+var settings = typeof(setPre) == "undefined" ? [0.2, "Luminari", 1, 5] : [parseFloat(setPre.split(",")[0]), setPre.split(",")[1], parseInt(setPre.split(",")[2]), parseInt(setPre.split(",")[3])]
 var running = false
 var textHover = 0
 var textHoverChange = settings[0] * 2.5
@@ -969,6 +1010,7 @@ function animate() {
                         cutscene = 5
                     }
                     flower.justCreated = false
+                    pushFx("flowerPlace.wav")
                 }
                 flowerRadius = flower.growth*fR/10 * 6
                 ctx.fillStyle = "white"
@@ -1101,7 +1143,7 @@ function animate() {
         frame += 1
     } else if (dialogueMenu) {
         menuHovering = -1
-        for (i=0; i<=dialogues.length; i++) {
+        for (i=0; i<dialogues.length; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
                 menuHovering = i
                 break;
@@ -1249,7 +1291,7 @@ function animate() {
             ctx.stroke()
         }
     } else if (settingsMenu) {
-        for (i=0; i<4; i++) {
+        for (i=0; i<5; i++) {
             if (mousePos.y >= canvas.height/2 + canvas.width/25*(i) - textHover && mousePos.y <= canvas.height/2 + canvas.width/25*(i+1)) {
                 menuHovering = i
                 break;
@@ -1274,7 +1316,8 @@ function animate() {
         ctx.fillText(`Font: ${settings[1]}.`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 - textHover)
         ctx.fillText(`Screen Effects: ${settings[0] == 0.2 ? "On" : "Off"}`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*2 - textHover)
         ctx.fillText(`Particles: ${settings[2] == 1 ? "On" : "Off"}`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*3 - textHover)
-        ctx.fillText("[Back to menu]", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 4 - textHover)
+        ctx.fillText(`SFX Volume: ${settings[3]*10}%`, canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25*4 - textHover)
+        ctx.fillText("[Back to menu]", canvas.width/2 - canvas.width/5, canvas.height/2 + canvas.width/25 * 5 - textHover)
 
         for (i=0; i<canvas.width/5; i++) {
             ctx.strokeStyle = "green"
